@@ -1,0 +1,33 @@
+import xarray as xr
+import rasterio
+import glob
+import numpy as np
+
+# Load all GeoTIFFs
+tif_files = sorted(glob.glob('path_to_downloaded_tiffs/O3_Cairo_*.tif'))
+
+# Read each file and store as DataArray
+dataarrays = []
+dates = []
+
+for tif in tif_files:
+    with rasterio.open(tif) as src:
+        data = src.read(1)
+        transform = src.transform
+        lon = np.arange(data.shape[1]) * transform.a + transform.c
+        lat = np.arange(data.shape[0]) * transform.e + transform.f
+        da = xr.DataArray(data, coords=[("lat", lat), ("lon", lon)])
+        dataarrays.append(da)
+        # Extract date from filename
+        date_str = tif.split('_')[-2] + '-' + tif.split('_')[-1].split('.')[0]
+        dates.append(np.datetime64(date_str))
+
+# Combine into single DataArray with time dimension
+stacked = xr.concat(dataarrays, dim="time")
+stacked["time"] = dates
+
+# Convert to dataset
+ds = stacked.to_dataset(name="O3_column_number_density")
+
+# Save to NetCDF
+ds.to_netcdf("O3_Cairo_2019_2024.nc")
